@@ -64,18 +64,21 @@ void fat::fileContent(char *string) {
         fread(dir, sizeof(struct directory), 1, p_file);
         if (dir->start_cluster!=0 && strcmp(dir->name, split)==0) {
             if (dir->is_file){
-                stringstream ss;
-                int32_t x = f[dir->start_cluster];
-                ss << dir->start_cluster;
+                char *text = (char *) malloc(sizeof(char) * br.cluster_size);
+                int32_t x = dir->start_cluster;
                 while(x!=FAT_FILE_END){
-                    ss << ":" << x;
+                    fsetpos(p_file, &default_data_position);
+                    fseek(p_file, br.cluster_size*x, SEEK_CUR);
+                    fread(text, (size_t) br.cluster_size, 1, p_file);
+                    ss.append(text);
                     x = f[x];
                 }
 
-                cout << split << " " << ss.str() << endl;
+                cout << split << ": " << ss << endl;
                 return;
             }
             split = strtok(NULL, "/");
+            if (split==NULL) break;
             fsetpos(p_file, &default_data_position);
             fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
             j=-1;
@@ -106,6 +109,7 @@ void fat::getClusters(char *string) {
                 return;
             }
             split = strtok(NULL, "/");
+            if (split==NULL) break;
             fsetpos(p_file, &default_data_position);
             fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
             j=-1;

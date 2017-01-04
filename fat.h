@@ -48,6 +48,7 @@ class fat {
 
     int32_t* f;
     char *escape_tabs;
+    std::string ss = "";
     //pointery na struktury root a boot
     struct boot_record *p_boot_record;
 
