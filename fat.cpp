@@ -54,6 +54,54 @@ void fat::init() {
     max_dir_num = br.cluster_size/sizeof(directory);
 }
 
+void fat::createDirectory(char *string, char *string1) {
+    fsetpos(p_file, &default_data_position);
+    directory *dir = (directory *) malloc(sizeof(struct directory));
+
+    char *split = strtok(string1, "/");
+
+    for (int j = 0; j < max_dir_num; j++) {
+        fread(dir, sizeof(struct directory), 1, p_file);
+        if (dir->start_cluster!=0 && strcmp(dir->name, split)==0) {
+            if (dir->is_file){
+                cout << "PATH TO THE FILE IS NOT SUPPORTED" << endl;
+                free(dir);
+                return;
+            }
+            split = strtok(NULL, "/");
+            fsetpos(p_file, &default_data_position);
+            fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
+            if (split==NULL) {
+                implementDir(string);
+                free(dir);
+                return;
+            }
+            j=-1;
+        }
+    }
+    free(dir);
+    cout << "PATH NOT FOUND" << endl;
+    fclose(p_file);
+}
+
+void fat::implementDir(char *string) {
+    directory newDir;
+    memset(newDir.name, '\0', sizeof(newDir.name));
+    newDir.is_file = 0;
+    strcpy(newDir.name,string);
+    newDir.size = 0;
+
+    for (int i = 0; i < br.usable_cluster_count; ++i) {
+        if (f[i]==FAT_UNUSED) {
+            newDir.start_cluster = i;
+            f[i] = FAT_DIRECTORY;
+            break;
+        }
+    }
+
+
+}
+
 void fat::fileContent(char *string) {
     fsetpos(p_file, &default_data_position);
     directory *dir = (directory *) malloc(sizeof(struct directory));
@@ -75,6 +123,8 @@ void fat::fileContent(char *string) {
                 }
 
                 cout << split << ": " << ss << endl;
+                free(dir);
+                free(text);
                 return;
             }
             split = strtok(NULL, "/");
@@ -84,6 +134,7 @@ void fat::fileContent(char *string) {
             j=-1;
         }
     }
+    free(dir);
     cout << "PATH NOT FOUND" << endl;
 }
 
@@ -106,6 +157,7 @@ void fat::getClusters(char *string) {
                 }
 
                 cout << split << " " << ss.str() << endl;
+                free(dir);
                 return;
             }
             split = strtok(NULL, "/");
@@ -115,6 +167,7 @@ void fat::getClusters(char *string) {
             j=-1;
         }
     }
+    free(dir);
     cout << "PATH NOT FOUND" << endl;
 }
 
@@ -146,11 +199,13 @@ void fat::list() {
     }
     if (empty) {
         cout << "EMPTY" << endl;
+        free(dir);
         return;
     }
     escape_tabs = removeCharToCharArray(escape_tabs);
     printf("%s--\n", escape_tabs);
-    fseek(p_file, br.cluster_size-sizeof(directory)*max_dir_num, SEEK_CUR);
+//    fseek(p_file, br.cluster_size-sizeof(directory)*max_dir_num, SEEK_CUR);
+    free(dir);
 }
 
 void fat::writeDir(){

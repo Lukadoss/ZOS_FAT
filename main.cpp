@@ -21,7 +21,8 @@ int main(int argc, char* argv[]) {
             fatka.getClusters(argv[i+1]);
             i+=2;
         } else if (arg == "-m") {
-            cout << arg << endl;
+            fatka.createDirectory(argv[i+1], argv[i+2]);
+            i+=3;
         } else if (arg == "-r") {
             cout << arg << endl;
         } else if (arg == "-l") {
@@ -35,5 +36,7 @@ int main(int argc, char* argv[]) {
             i++;
         }
     }
+    free(fatka.f);
+    free(fatka.p_boot_record);
     return 0;
 }

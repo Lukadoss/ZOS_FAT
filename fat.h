@@ -46,13 +46,13 @@ class fat {
     boot_record br;
     directory root_a, root_b, root_c, root_d, root_e, root_f;
 
-    int32_t* f;
     char *escape_tabs;
     std::string ss = "";
     //pointery na struktury root a boot
-    struct boot_record *p_boot_record;
 
 public:
+    struct boot_record *p_boot_record;
+    int32_t* f;
 
     fat();
 
@@ -73,6 +73,10 @@ public:
     char *nameToUpper(char *name);
 
     void fileContent(char *string);
+
+    void createDirectory(char *string, char *string1);
+
+    void implementDir(char *string);
 };
 
 
