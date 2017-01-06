@@ -28,6 +28,9 @@ fat::fat(char *file) {
     init();
 }
 
+/**
+ * Inicializace promennych, nacteni FAT souboru, nacteni bootovaci a FAT tabulky
+ */
 void fat::init() {
     p_boot_record = (struct boot_record *) malloc(sizeof(struct boot_record));
 
@@ -39,7 +42,7 @@ void fat::init() {
     fread(p_boot_record, sizeof(struct boot_record), 1, p_file);
     f = (int32_t*) malloc(sizeof(int32_t)*br.usable_cluster_count*br.fat_copies);
 
-    fread(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file); //TODO: TADY JE BORDEL LINUX VS WINDOWS sizeof(f)!!!!!!!!
+    fread(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
 
     if (DEBUG) {
         printf("-------------------------------------------------------- \n");
@@ -64,17 +67,51 @@ void fat::init() {
 //  1. Ukol - Zkopirovani souboru do FAT
 //
 
+/**
+ *  Vlozi soubor a obsah do FAT
+ * @param name jmeno souboru
+ */
 void fat::implementFile(char *name) {
     cout<<"Som tu" << endl;
     FILE *newFile = fopen(name, "r");
-//
-//    directory newDir;
-//    name[sizeof(newDir.name)] = '\0';
-//
-//    memset(newDir.name, '\0', sizeof(newDir.name));
-//    newDir.is_file = 0;
-//    strcpy(newDir.name, name);
-//    newDir.size = 0;
+    if (newFile==0) {
+        cout << "FILE NOT EXIST!" <<endl;
+        return;
+    }
+    vector<string> split_content = vector<string>();
+
+    fseek(newFile, 0, SEEK_END);
+    long fsize = ftell(newFile);
+    fseek(newFile, 0, SEEK_SET);
+    string content((unsigned long) fsize, '\0');
+    fread(&content, (size_t) fsize, 1, newFile);
+    fclose(newFile);
+
+    long subStr = content.length() / br.cluster_size;
+
+    for (int i = 0; i < subStr; i++) {
+        split_content.push_back(content.substr((unsigned long) (i * br.cluster_size), (unsigned long) br.cluster_size));
+    }
+    if (content.length() % br.cluster_size != 0) {
+        split_content.push_back(content.substr((unsigned long) (br.cluster_size * subStr)));
+    }
+    int size = 0;
+    for (int i = 0; i < br.usable_cluster_count; i++) {
+        if (f[i]==FAT_UNUSED) size++;
+        else if(size==split_content.size()) break;
+    }
+    if (size < split_content.size()){
+        cout << "NOT ENOUGH SPACE" << endl;
+        return;
+    }
+
+    directory newDir;
+    name[sizeof(newDir.name)] = '\0';
+
+    memset(newDir.name, '\0', sizeof(newDir.name));
+    newDir.is_file = 1;
+    strcpy(newDir.name, name);
+    newDir.size = (int32_t) fsize;
 //
 //    for (int i = 0; i < br.usable_cluster_count; ++i) {
 //        if (f[i]==FAT_UNUSED) {
@@ -99,10 +136,13 @@ void fat::implementFile(char *name) {
 //  2. Ukol - Smazani souboru
 //
 
-void fat::removeFile(char *path) {
+/**
+ * Nalezne cestu k souboru, osetri vstupy
+ * @param path cesta
+ */
+void fat::findRemoveFile(char *path) {
     fsetpos(p_file, &default_data_position);
 
-    fpos_t deletingDirPos;
     char *split = strtok(path, "/");
 
     if (split==NULL){
@@ -115,37 +155,8 @@ void fat::removeFile(char *path) {
     for (int i = 0; i < max_dir_num; i++) {
         fread(children, sizeof(struct directory), 1, p_file);
         if (children->start_cluster!=0 && strcmp(children->name, split)==0) {
-            fgetpos(p_file, &deletingDirPos);
-
             if (children->is_file){
-                char cluster_empty[br.cluster_size];
-                memset(cluster_empty, '\0', sizeof(cluster_empty));
-
-                int32_t x = children->start_cluster;
-                int32_t temp;
-
-                while(x!=FAT_FILE_END){
-                    fsetpos(p_file, &default_data_position);
-                    fseek(p_file, br.cluster_size*x, SEEK_CUR);
-                    fwrite(&cluster_empty, (size_t) br.cluster_size, 1, p_file);
-                    temp = x;
-                    x = f[x];
-                    f[temp] = FAT_UNUSED;
-                }
-
-                fsetpos(p_file, &deletingDirPos);
-                fseek(p_file, -sizeof(directory), SEEK_CUR);
-                char buffer[] = {'\0'};
-                for (int16_t j = 0; j < sizeof(directory); j++)
-                    fwrite(buffer, sizeof(buffer), 1, p_file);
-
-                fseek(p_file, sizeof(boot_record), SEEK_SET);
-                fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
-                cout << "OK" << endl;
-
-                fclose(p_file);
-                init();
-
+                removeFile(children);
                 free(children);
                 return;
             }
@@ -156,6 +167,42 @@ void fat::removeFile(char *path) {
     }
     free(children);
     cout << "PATH NOT FOUND" << endl;
+}
+
+/**
+ * Smaze soubor a jeho obsah z FAT
+ * @param children hlavicka souboru
+ */
+void fat::removeFile(directory *children) {
+    fpos_t deletingDirPos;
+    fgetpos(p_file, &deletingDirPos);
+    char cluster_empty[br.cluster_size];
+    memset(cluster_empty, '\0', sizeof(cluster_empty));
+
+    int32_t x = children->start_cluster;
+    int32_t temp;
+
+    while(x!=FAT_FILE_END){
+        fsetpos(p_file, &default_data_position);
+        fseek(p_file, br.cluster_size*x, SEEK_CUR);
+        fwrite(&cluster_empty, (size_t) br.cluster_size, 1, p_file);
+        temp = x;
+        x = f[x];
+        f[temp] = FAT_UNUSED;
+    }
+
+    fsetpos(p_file, &deletingDirPos);
+    fseek(p_file, -sizeof(directory), SEEK_CUR);
+    char buffer[] = {'\0'};
+    for (int16_t j = 0; j < sizeof(directory); j++)
+        fwrite(buffer, sizeof(buffer), 1, p_file);
+
+    fseek(p_file, sizeof(boot_record), SEEK_SET);
+    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+    cout << "OK" << endl;
+
+    fclose(p_file);
+    init();
 }
 
 //
@@ -242,7 +289,7 @@ void fat::implementDir(char *name) {
 //
 
 /**
- * Smaze prazdny adresar
+ * Nalezne cestu adresare a zkontroluje obsah
  * @param path cesta k adresari
  */
 void fat::findRemoveDir(char *path) {
@@ -297,6 +344,10 @@ void fat::findRemoveDir(char *path) {
     cout << "PATH NOT FOUND" << endl;
 }
 
+/**
+ * Smaze adresar, updatuje fat tabulku
+ * @param dir adresar
+ */
 void fat::removeDir(directory *dir) {
     f[dir->start_cluster] = FAT_UNUSED;
 

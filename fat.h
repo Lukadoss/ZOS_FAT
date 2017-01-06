@@ -84,9 +84,11 @@ public:
 
     void implementFile(char *name);
 
-    void removeFile(char *path);
-
     void findRemoveDir(char *path);
+
+    void findRemoveFile(char *path);
+
+    void removeFile(directory *dir);
 };
 
 

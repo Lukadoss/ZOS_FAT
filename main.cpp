@@ -17,7 +17,7 @@ int main(int argc, char* argv[]) {
             fatka.findPath(arg, argv[i+1], argv[i+2]);
             i+=3;
         } else if (arg == "-f") {
-            fatka.removeFile(argv[i+1]);
+            fatka.findRemoveFile(argv[i+1]);
             i+=2;
         } else if (arg == "-c") {
             fatka.getClusters(argv[i+1]);
