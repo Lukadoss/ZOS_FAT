@@ -8,7 +8,7 @@ int main(int argc, char* argv[]) {
         cout << "Not enough arguments. Program will now end" << endl;
         return 1;
     }
-    fat fatka;
+    fat fatka(argv[1]);
     int i = 2;
     while(i<argc) {
         string arg = argv[i];
@@ -36,7 +36,5 @@ int main(int argc, char* argv[]) {
             i++;
         }
     }
-    free(fatka.f);
-    free(fatka.p_boot_record);
     return 0;
 }

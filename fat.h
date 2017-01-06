@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <math.h>
+#include <vector>
 
 class fat {
     //boot_rec
@@ -37,13 +38,15 @@ class fat {
     const int32_t FAT_UNUSED = INT32_MAX - 1;
     const int32_t FAT_FILE_END = INT32_MAX - 2;
     const int32_t FAT_BAD_CLUSTER = INT32_MAX - 3;
-    static const int32_t FAT_DIRECTORY = INT32_MAX - 4;
+    const int32_t FAT_DIRECTORY = INT32_MAX - 4;
     int max_dir_num;
+    char *FAT_FILE;
 
     FILE *p_file;
     fpos_t default_data_position;
 
     boot_record br;
+    int32_t *f;
     directory root_a, root_b, root_c, root_d, root_e, root_f;
 
     char *escape_tabs;
@@ -52,9 +55,8 @@ class fat {
 
 public:
     struct boot_record *p_boot_record;
-    int32_t* f;
 
-    fat();
+    fat(char *file);
 
     void init();
 
@@ -62,7 +64,7 @@ public:
 
     void list();
 
-    char* appendCharToCharArray(char* array, char a);
+    char *appendCharToCharArray(char* array, char a);
 
     char *removeCharToCharArray(char *array);
 
@@ -76,7 +78,7 @@ public:
 
     void createDirectory(char *string, char *string1);
 
-    void implementDir(char *string);
+    void implementDir(char *string, int32_t cluster);
 };
 
 

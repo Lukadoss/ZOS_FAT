@@ -5,8 +5,11 @@
 using namespace std;
 
 bool DEBUG = false;
+bool linux = false;
 
-fat::fat() {
+fat::fat(char *file) {
+    this->FAT_FILE = file;
+
     br.fat_type = 8;
     br.fat_copies = 2;
     br.cluster_size = 256;
@@ -25,15 +28,16 @@ void fat::init() {
     p_boot_record = (struct boot_record *) malloc(sizeof(struct boot_record));
 
     //otevru soubor a pro jistotu skocim na zacatek
-    p_file = fopen("linux.fat", "r");
+    p_file = fopen(FAT_FILE, "r+");
     fseek(p_file, 0, SEEK_SET);
 
     //prectu boot a fat tabulku s vsemi copies
     fread(p_boot_record, sizeof(struct boot_record), 1, p_file);
-    f = (int32_t*) malloc(sizeof(int32_t)*br.usable_cluster_count);
-    for (int k = 0; k < br.fat_copies; ++k) {
-        fread(f, sizeof(f)*br.usable_cluster_count, 1, p_file);
-    }
+    f = (int32_t*) malloc(sizeof(int32_t)*br.usable_cluster_count*br.fat_copies);
+
+    fread(f, sizeof(f)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+
+    if (linux) fseek(p_file, -br.fat_copies, SEEK_CUR);
 
     if (DEBUG) {
         printf("-------------------------------------------------------- \n");
@@ -54,13 +58,23 @@ void fat::init() {
     max_dir_num = br.cluster_size/sizeof(directory);
 }
 
+//
+//  4. Ukol - Vytvoreni noveho adresare
+//
+
+/**
+ * Vyhleda cestu do adresare, kde se ma novy adresar vytvorit
+ * @param string nazev souboru
+ * @param string1 cesta
+ */
 void fat::createDirectory(char *string, char *string1) {
     fsetpos(p_file, &default_data_position);
+
     directory *dir = (directory *) malloc(sizeof(struct directory));
 
     char *split = strtok(string1, "/");
 
-    for (int j = 0; j < max_dir_num; j++) {
+    for (int i = 0; i < max_dir_num; i++) {
         fread(dir, sizeof(struct directory), 1, p_file);
         if (dir->start_cluster!=0 && strcmp(dir->name, split)==0) {
             if (dir->is_file){
@@ -71,12 +85,13 @@ void fat::createDirectory(char *string, char *string1) {
             split = strtok(NULL, "/");
             fsetpos(p_file, &default_data_position);
             fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
+
             if (split==NULL) {
-                implementDir(string);
+                implementDir(string, dir->start_cluster);
                 free(dir);
                 return;
             }
-            j=-1;
+            i=-1;
         }
     }
     free(dir);
@@ -84,7 +99,13 @@ void fat::createDirectory(char *string, char *string1) {
     fclose(p_file);
 }
 
-void fat::implementDir(char *string) {
+/**
+ * Vytvoreni noveho adresare, zapis do FAT,
+ * @param string nazev
+ * @param cluster cislo clusteru
+ * @param dirPos volna pozice v clusteru
+ */
+void fat::implementDir(char *string, int32_t cluster) {
     directory newDir;
     memset(newDir.name, '\0', sizeof(newDir.name));
     newDir.is_file = 0;
@@ -94,14 +115,49 @@ void fat::implementDir(char *string) {
     for (int i = 0; i < br.usable_cluster_count; ++i) {
         if (f[i]==FAT_UNUSED) {
             newDir.start_cluster = i;
-            f[i] = FAT_DIRECTORY;
+            f[i]=FAT_DIRECTORY;
             break;
         }
     }
+    std::vector<fat::directory> children;
+    directory *headers = (directory *) malloc(sizeof(directory));
+    for (int i = 0; i < max_dir_num; i++) {
+        fread(headers, sizeof(directory), 1, p_file);
+        if (headers->start_cluster == 0) {
+            fseek(p_file, (long) (-sizeof(directory) * (i+1)), SEEK_CUR);
 
+            int16_t ac_size = 0;
+            for(int j = 0; j < children.size(); j++){
+                fwrite(&children.at(j), sizeof(directory), 1, p_file);
+                ac_size += sizeof(directory);
+            }
+            fwrite(&newDir, sizeof(newDir), 1, p_file);
+            ac_size += sizeof(directory);
+            char buffer[] = {'\0'};
+            for (int16_t i = 0; i < (br.cluster_size - ac_size); i++) {
+                fwrite(buffer, sizeof(buffer), 1, p_file);
+            }
 
+            break;
+        }
+        children.push_back(*headers);
+    }
+
+    fseek(p_file, sizeof(boot_record), SEEK_SET);
+    fwrite(f, sizeof(f)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+
+    fclose(p_file);
+    init();
 }
 
+//
+// 6. Ukol - Nalezeni souboru a vypis jeho obsahu
+//
+
+/**
+ *  Vypisuje obsah nalezeneho souboru na zadane ceste
+ * @param string cesta k souboru
+ */
 void fat::fileContent(char *string) {
     fsetpos(p_file, &default_data_position);
     directory *dir = (directory *) malloc(sizeof(struct directory));
@@ -138,6 +194,16 @@ void fat::fileContent(char *string) {
     cout << "PATH NOT FOUND" << endl;
 }
 
+
+
+//
+// 3. Ukol - Nalezeni souboru a vypis clusteru
+//
+
+/**
+ * Vypisuje vsechny clustery, na kterych se vyskytuje obsah souboru
+ * @param string cesta k souboru
+ */
 void fat::getClusters(char *string) {
     fsetpos(p_file, &default_data_position);
     directory *dir = (directory *) malloc(sizeof(struct directory));
@@ -171,15 +237,24 @@ void fat::getClusters(char *string) {
     cout << "PATH NOT FOUND" << endl;
 }
 
+
+
+//
+//   Ukol 7. - Funkce pro vypsani adresarove struktury.
+//
+
+/**
+ *  Zacatek vypisu z rootu definujici zakladni adresar fatky
+ */
 void fat::list() {
     fsetpos(p_file, &default_data_position);
+
     escape_tabs = (char *) "\t";
     directory *dir = (directory *) malloc(sizeof(struct directory));
     bool empty=true;
 
     for (int j = 0; j < max_dir_num; j++) {
         fread(dir, sizeof(struct directory), 1, p_file);
-
         if (dir->start_cluster!=0 && dir->is_file) {
             if (empty) cout << "+ROOT" << endl;
             empty = false;
@@ -192,8 +267,8 @@ void fat::list() {
             fpos_t position;
             fgetpos (p_file, &position);
             fsetpos(p_file, &default_data_position);
-                fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
-                writeDir();
+            fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
+            writeDir();
             fsetpos (p_file, &position);
         }
     }
@@ -208,10 +283,13 @@ void fat::list() {
     free(dir);
 }
 
+/**
+ *  Rekurzivni vypis adresaru se vsemi daty v nich
+ */
 void fat::writeDir(){
-    directory *dir = (directory *) malloc(sizeof(struct directory));
+    directory *dir = (directory *) malloc(sizeof(directory));
     for (int j = 0; j < max_dir_num; j++) {
-        fread(dir, sizeof(struct directory), 1, p_file);
+        fread(dir, sizeof(directory), 1, p_file);
 
         if (dir->start_cluster!=0 && dir->is_file) {
             printf("%s-%s %d %d\n ", escape_tabs, dir->name, dir->start_cluster, (int) ceil((double)dir->size / br.cluster_size));
@@ -231,6 +309,15 @@ void fat::writeDir(){
     free(dir);
 }
 
+
+
+//
+// Pomocne funkce
+//
+
+/**
+ *  Automaticky reset fatky do defaultniho nastaveni. Pouzivane pro debugovani a rychle upravy.
+ */
 void fat::reset() {
     //directory - vytvoreni polozek
     memset(root_a.name, '\0', sizeof(root_a.name));
@@ -446,7 +533,7 @@ void fat::reset() {
 
 /////////// KONEC VYTVARENI FAT TABULKY
 
-    FILE *fp = fopen("linux.fat", "w");
+    FILE *fp = fopen("windows.fat", "w");
     //boot record
     fwrite(&br, sizeof(br), 1, fp);
     // 2x FAT
@@ -527,6 +614,12 @@ void fat::reset() {
     fclose(fp);
 }
 
+/**
+ *  Pridava na konec pole novy znak. Uzivane pro odradkovavani pomoci /t
+ * @param array pole znaku
+ * @param a pridavany znak
+ * @return nove pole
+ */
 char* fat::appendCharToCharArray(char* array, char a) {
     size_t len = strlen(array);
 
@@ -539,12 +632,22 @@ char* fat::appendCharToCharArray(char* array, char a) {
     return ret;
 }
 
+/**
+ * Odstranuje z pole koncovy znak.
+ * @param array pole
+ * @return nove pole
+ */
 char* fat::removeCharToCharArray(char* array) {
     size_t len = strlen(array);
     array[len-1] = '\0';
     return array;
 }
 
+/**
+ * Prevadi jmena na velka pismena
+ * @param name jmeno
+ * @return uppercase jmeno
+ */
 char* fat::nameToUpper(char *name){
     char *ret = new char[strlen(name)];
     for (int i=0; i<strlen(name); ++i) ret[i] = (char) toupper(name[i]);
