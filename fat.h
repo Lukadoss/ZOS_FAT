@@ -14,9 +14,11 @@
 #include <stdint.h>
 #include <math.h>
 #include <vector>
+#include <stdlib.h>
+#include <sstream>
+#include <map>
 
 class fat {
-    //boot_rec
     struct boot_record {
         char volume_descriptor[250];    //popis vygenerovaného FS
         int8_t fat_type;                //typ FAT (FAT12, FAT16...) 2 na fat_type - 1 clusterů
@@ -26,7 +28,6 @@ class fat {
         char signature[9];              //login autora FS
     };// 272B
 
-    //pokud bude ve FAT FAT_DIRECTORY, budou na disku v daném clusteru uloženy struktury o velikosti sizeof(directory) = 24B
     struct directory{
         char name[13];                  //jméno souboru, nebo adresáře ve tvaru 8.3'/0' 12 + 1
         bool is_file;                    //identifikace zda je soubor (TRUE), nebo adresář (FALSE)
@@ -35,10 +36,9 @@ class fat {
     };// 24B
 
     //pocitame s FAT32 MAX - tedy horni 4 hodnoty
-    const int32_t FAT_UNUSED = INT32_MAX - 1;
-    const int32_t FAT_FILE_END = INT32_MAX - 2;
-    const int32_t FAT_BAD_CLUSTER = INT32_MAX - 3;
-    const int32_t FAT_DIRECTORY = INT32_MAX - 4;
+    const static int32_t FAT_UNUSED = INT32_MAX - 1;
+    const static int32_t FAT_FILE_END = INT32_MAX - 2;
+    const static int32_t FAT_DIRECTORY = INT32_MAX - 3;
     int max_dir_num;
     char *FAT_FILE;
 
@@ -52,7 +52,9 @@ class fat {
 
     char *escape_tabs;
     std::string ss = "";
-    //pointery na struktury root a boot
+    std::map<int, struct directory> fileMap;
+    std::map<int, std::vector<struct directory>> directoryClustersMap;
+    std::map<std::string, std::vector<std::string>> fileContentMap;
 
     void init();
 
@@ -73,6 +75,17 @@ class fat {
     char *nameToUpper(char *name);
 
     void writeDir();
+
+    char * getDirName(int pos);
+
+    char *getFileName(int pos);
+
+    void getFileMap();
+
+    void getDirectoryMap(int x);
+
+    void writeFatStatus();
+
 
 public:
 

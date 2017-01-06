@@ -1,5 +1,3 @@
-#include <stdlib.h>
-#include <sstream>
 #include "fat.h"
 
 using namespace std;
@@ -24,7 +22,6 @@ fat::fat(char *file) {
     strcpy(br.signature, "lukad");
 
     if (DEBUG) reset();
-
     init();
 }
 
@@ -168,6 +165,7 @@ void fat::findRemoveFile(char *path) {
                 return;
             }
             split = strtok(NULL, "/");
+            if (split==NULL) break;
             fsetpos(p_file, &default_data_position);
             fseek(p_file, br.cluster_size*children->start_cluster, SEEK_CUR);
         }
@@ -497,19 +495,19 @@ void fat::reset() {
     root_a.is_file = 1;
     strcpy(root_a.name,"cisla.txt");
     root_a.size = 135;
-    root_a.start_cluster = 1;
+    root_a.start_cluster = 2;
 
     memset(root_b.name, '\0', sizeof(root_b.name));
     root_b.is_file = 1;
     strcpy(root_b.name,"pohadka.txt");
     root_b.size = 5975;
-    root_b.start_cluster = 2;
+    root_b.start_cluster = 1;
 
     memset(root_c.name, '\0', sizeof(root_c.name));
     root_c.is_file = 1;
     strcpy(root_c.name,"msg.txt");
     root_c.size = 396;
-    root_c.start_cluster = 30;
+    root_c.start_cluster = 7;
 
     memset(root_d.name, '\0', sizeof(root_d.name));
     root_d.is_file = 0;
@@ -658,16 +656,16 @@ void fat::reset() {
     //ve fatce na 0 clusteru bude root directory
     fat[0] = FAT_DIRECTORY;
     //pak bude soubor "cisla.txt" - ten je jen jednoclusterovy
-    fat[1] = FAT_FILE_END;
+    fat[1] = 3;
     //pak bude dlouhy soubor "pohadka.txt", ktery je cely za sebou
-    fat[2] = 3;
+    fat[2] = FAT_FILE_END;
     fat[3] = 4;
     fat[4] = 5;
     fat[5] = 6;
-    fat[6] = 7;
-    fat[7] = 8;
-    fat[8] = 9;
-    fat[9] = 10;
+    fat[6] = 8;
+    fat[7] = 9;
+    fat[8] = 10;
+    fat[9] = FAT_FILE_END;
     fat[10] = 11;
     fat[11] = 12;
     fat[12] = 13;
@@ -683,19 +681,18 @@ void fat::reset() {
     fat[22] = 23;
     fat[23] = 24;
     fat[24] = 25;
-    fat[25] = FAT_FILE_END;
-    //ted bude nejake volne misto
+    fat[25] = 30;
+    //ted bude nejake volne misto a adr
     fat[26] = FAT_UNUSED;
     fat[27] = FAT_DIRECTORY;
     fat[28] = FAT_UNUSED;
-    //pak adresar "directory-1"
+    //pak adresar "adr1"
     fat[29] = FAT_DIRECTORY;
-    //pak soubor "msg.txt"
+    //pak soubor "pohadka.txt"
     fat[30] = 33;
-    //bohuzel pri jeho zapisu se se muselo fragmenotvat - jsou tu dva spatne sektory
-    fat[31] = FAT_BAD_CLUSTER;
-    fat[32] = FAT_BAD_CLUSTER;
-    //a tady je konec "msg.txt"
+    fat[31] = FAT_UNUSED;
+    fat[32] = FAT_UNUSED;
+    //a tady je konec "pohadky.txt"
     fat[33] = FAT_FILE_END;
     fat[34] = FAT_DIRECTORY;
     //zbytek bude prazdny
@@ -722,15 +719,21 @@ void fat::reset() {
     for (int16_t i = 0; i < (cl_size - ac_size); i++)
         fwrite(buffer, sizeof(buffer), 1, fp);
     ac_size = 0;
-    //data - soubor cisla.txt
-    fwrite(&cluster_a, sizeof(cluster_a), 1, fp);
     //data - soubor pohadka.txt
     fwrite(&cluster_b1, sizeof(cluster_b1), 1, fp);
+    //data - soubor cisla.txt
+    fwrite(&cluster_a, sizeof(cluster_a), 1, fp);
     fwrite(&cluster_b2, sizeof(cluster_b2), 1, fp);
     fwrite(&cluster_b3, sizeof(cluster_b3), 1, fp);
     fwrite(&cluster_b4, sizeof(cluster_b4), 1, fp);
     fwrite(&cluster_b5, sizeof(cluster_b5), 1, fp);
+
+    fwrite(&cluster_c1, sizeof(cluster_c1), 1, fp);
+
     fwrite(&cluster_b6, sizeof(cluster_b6), 1, fp);
+
+    fwrite(&cluster_c2, sizeof(cluster_c2), 1, fp);
+
     fwrite(&cluster_b7, sizeof(cluster_b7), 1, fp);
     fwrite(&cluster_b8, sizeof(cluster_b8), 1, fp);
     fwrite(&cluster_b9, sizeof(cluster_b9), 1, fp);
@@ -747,8 +750,7 @@ void fat::reset() {
     fwrite(&cluster_b20, sizeof(cluster_b20), 1, fp);
     fwrite(&cluster_b21, sizeof(cluster_b21), 1, fp);
     fwrite(&cluster_b22, sizeof(cluster_b22), 1, fp);
-    fwrite(&cluster_b23, sizeof(cluster_b23), 1, fp);
-    fwrite(&cluster_b24, sizeof(cluster_b24), 1, fp);
+
     //2x volne misto a adresar 3
     fwrite(&cluster_empty, sizeof(cluster_empty), 1, fp);
     fwrite(&root_a, sizeof(root_a), 1, fp);
@@ -766,12 +768,12 @@ void fat::reset() {
         fwrite(buffer, sizeof(buffer), 1, fp);
     ac_size =0;
     //prvni cast msg.txt
-    fwrite(&cluster_c1, sizeof(cluster_c1), 1, fp);
+    fwrite(&cluster_b23, sizeof(cluster_b23), 1, fp);
     //sem je jedno co zapisu, sou to vadne sektory - tedy realne byto meli byt stringy FFFFFFcosi cosi cosiFFFFFF
     fwrite(&cluster_empty, sizeof(cluster_empty), 1, fp);
     fwrite(&cluster_empty, sizeof(cluster_empty), 1, fp);
     //druha cast msg.txt
-    fwrite(&cluster_c2, sizeof(cluster_c2), 1, fp);
+    fwrite(&cluster_b24, sizeof(cluster_b24), 1, fp);
     //dalsi neprazdny adresar
     fwrite(&root_f, sizeof(root_f), 1, fp);
     ac_size += sizeof(root_f);
@@ -907,5 +909,200 @@ char* fat::nameToUpper(char *name){
  * Funkce provadejici defragmentaci celeho FAT souboru
  */
 void fat::defragment(){
+    writeFatStatus();
 
+    fsetpos(p_file, &default_data_position);
+    getFileMap();
+    fsetpos(p_file, &default_data_position);
+    getDirectoryMap(0);
+    fsetpos(p_file, &default_data_position);
+
+    int x = (int) directoryClustersMap.size();
+
+    for (std::map<int, struct directory>::iterator it=fileMap.begin(); it!=fileMap.end(); ++it) {
+//        cout<<it->first<< " => " << it->second.name << endl;
+        int iter = it->second.size/br.cluster_size;
+        it->second.start_cluster = x;
+        for (int i = 0; i <= iter; ++i) {
+            if (i!=iter){
+                f[x] = x+1;
+            }else f[x] = FAT_FILE_END;
+            char cluster[br.cluster_size];
+            memset(cluster, '\0', sizeof(cluster));
+            strcpy(cluster, fileContentMap.at(it->second.name).at((unsigned long) i).c_str());
+
+            fsetpos(p_file, &default_data_position);
+            fseek(p_file, br.cluster_size*x, SEEK_CUR);
+            fwrite(&cluster, sizeof(cluster), 1, p_file);
+            x++;
+        }
+    }
+    x=1;
+    fsetpos(p_file, &default_data_position);
+
+    for (std::map<int, vector<directory>>::iterator it=directoryClustersMap.begin(); it!=directoryClustersMap.end(); ++it) {
+        int16_t ac_size = 0;
+        int16_t cl_size = br.cluster_size;
+        char buffer[] = {'\0'};
+
+        for (unsigned int i = 0; i < it->second.size(); ++i) {
+            if (it->second.at(i).start_cluster!=0 && !it->second.at(i).is_file){
+//                cout<<it->first<< " => " << it->second.at(i).name << endl;
+                f[x] = FAT_DIRECTORY;
+                it->second.at(i).start_cluster = x;
+                x++;
+            } else if(it->second.at(i).start_cluster!=0)
+                it->second.at(i).start_cluster = fileMap.at(it->second.at(i).start_cluster).start_cluster;
+            fwrite(&it->second.at(i), sizeof(it->second.at(i)), 1, p_file);
+            ac_size += sizeof(directory);
+        }
+        for (int16_t i = 0; i < (cl_size - ac_size); i++)
+            fwrite(buffer, sizeof(buffer), 1, p_file);
+    }
+
+    fseek(p_file, sizeof(boot_record), SEEK_SET);
+    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+    cout << "DEFRAGMENTATION SUCCESSFUL!" << endl << endl;
+
+    writeFatStatus();
+
+}
+
+char *fat::getDirName(int pos){
+    directory *dir = (directory *) malloc(sizeof(directory));
+    for (int j = 0; j < max_dir_num; j++) {
+        fread(dir, sizeof(directory), 1, p_file);
+
+        if (dir->start_cluster!=0 && !dir->is_file) {
+            if (dir->start_cluster==pos) return dir->name;
+            else {
+                fpos_t position;
+                fgetpos(p_file, &position);
+                fsetpos(p_file, &default_data_position);
+                fseek(p_file, br.cluster_size * dir->start_cluster, SEEK_CUR);
+                char *result = getDirName(pos);
+                if (strcmp(result, "DIRECTORY_NOT_FOUND")==0) fsetpos(p_file, &position);
+                else return result;
+            }
+        }
+    }
+    free(dir);
+    return (char *) "DIRECTORY_NOT_FOUND";
+}
+
+char *fat::getFileName(int pos){
+    directory *dir = (directory *) malloc(sizeof(directory));
+    for (int j = 0; j < max_dir_num; j++) {
+        fread(dir, sizeof(directory), 1, p_file);
+
+        if (dir->start_cluster!=0 && dir->is_file==1) {
+            int32_t x = dir->start_cluster;
+            while(x!=FAT_FILE_END){
+                if (x==pos) return dir->name;
+                x = f[x];
+            }
+
+        }else if(dir->start_cluster!=0){
+            fpos_t position;
+            fgetpos(p_file, &position);
+            fsetpos(p_file, &default_data_position);
+            fseek(p_file, br.cluster_size * dir->start_cluster, SEEK_CUR);
+            char *result = getFileName(pos);
+            if (strcmp(result, "FILE_NOT_FOUND")==0) fsetpos(p_file, &position);
+            else return result;
+        }
+    }
+    free(dir);
+    return (char *) "FILE_NOT_FOUND";
+}
+
+void fat::getDirectoryMap(int x){
+    directory *dir = (directory *) malloc(sizeof(directory));
+    vector<directory> dirCont;
+
+    for (int j = 0; j < max_dir_num; j++) {
+        fread(dir, sizeof(directory), 1, p_file);
+        if (dir->start_cluster!=0) dirCont.push_back(*dir);
+        if(dir->start_cluster!=0 && !dir->is_file){
+            f[dir->start_cluster] = FAT_UNUSED;
+            fpos_t position;
+            fgetpos(p_file, &position);
+            fsetpos(p_file, &default_data_position);
+            fseek(p_file, br.cluster_size * dir->start_cluster, SEEK_CUR);
+            getDirectoryMap(x+1);
+            fsetpos(p_file, &position);
+        }
+    }
+
+    char cluster_empty[br.cluster_size];
+    memset(cluster_empty, '\0', sizeof(cluster_empty));
+    fseek(p_file, -max_dir_num*sizeof(directory), SEEK_CUR);
+    fwrite(&cluster_empty, (size_t) br.cluster_size, 1, p_file);
+
+    directoryClustersMap.insert(pair<int, vector<struct directory>>(x ,dirCont));
+    free(dir);
+}
+
+void fat::getFileMap(){
+    directory *dir = (directory *) malloc(sizeof(directory));
+
+    for (int j = 0; j < max_dir_num; j++) {
+        fread(dir, sizeof(directory), 1, p_file);
+        if (dir->start_cluster!=0 && dir->is_file) {
+            int32_t x = dir->start_cluster;
+            char cluster_empty[br.cluster_size];
+            memset(cluster_empty, '\0', sizeof(cluster_empty));
+            fpos_t tempPos;
+            vector<string> fileContents;
+
+            fileMap.insert(pair<int, struct directory>(dir->start_cluster, *dir));
+            fgetpos(p_file, &tempPos);
+
+            while(x!=FAT_FILE_END){
+                string content((unsigned long) br.cluster_size, '\0');
+
+                fsetpos(p_file, &default_data_position);
+                fseek(p_file, br.cluster_size*x, SEEK_CUR);
+                fread(&content[0], (size_t) br.cluster_size, 1, p_file);
+                fseek(p_file, -br.cluster_size, SEEK_CUR);
+                fwrite(&cluster_empty, (size_t) br.cluster_size, 1, p_file);
+
+                fileContents.push_back(content);
+                int32_t temp = x;
+                x = f[x];
+                f[temp] = FAT_UNUSED;
+            }
+            fileContentMap.insert(pair<string, vector<string>>(dir->name, fileContents));
+            fsetpos(p_file, &tempPos);
+        }else if(dir->start_cluster!=0){
+            fpos_t position;
+            fgetpos(p_file, &position);
+            fsetpos(p_file, &default_data_position);
+            fseek(p_file, br.cluster_size * dir->start_cluster, SEEK_CUR);
+            getFileMap();
+            fsetpos(p_file, &position);
+        }
+    }
+    free(dir);
+}
+
+void fat::writeFatStatus() {
+    cout << "FAT FILE STATUS" << endl;
+    cout << "----------------------" << endl;
+    for (int i = 0; i < br.usable_cluster_count; i++) {
+        fsetpos(p_file, &default_data_position);
+        switch (f[i]) {
+            case FAT_DIRECTORY:
+                if (i==0) cout << i << "  :  Adresář (ROOT)" << endl;
+                else {
+                    cout << i << "  :  Adresář (" << getDirName(i) << ")" << endl;
+                }
+                break;
+            case FAT_UNUSED:
+                cout << i << "  :  Prázdné" << endl;
+                break;
+            default:
+                cout << i << "  :  Soubor (" << getFileName(i) << ")" << endl;
+        }
+    }
 }
