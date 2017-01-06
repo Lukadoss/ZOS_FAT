@@ -34,6 +34,9 @@ int main(int argc, char* argv[]) {
         } else if (arg == "-p") {
             fatka.list();
             i++;
+        } else if (arg == "-d"){
+            fatka.defragment();
+            i++;
         } else {
             cout << "Bad argument: " << arg << endl;
             i++;

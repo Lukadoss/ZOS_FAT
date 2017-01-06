@@ -68,23 +68,23 @@ void fat::init() {
 //
 
 /**
- *  Vlozi soubor a obsah do FAT
+ * Vlozi soubor a obsah do FAT
  * @param name jmeno souboru
  */
 void fat::implementFile(char *name) {
-    cout<<"Som tu" << endl;
     FILE *newFile = fopen(name, "r");
     if (newFile==0) {
         cout << "FILE NOT EXIST!" <<endl;
         return;
     }
+
     vector<string> split_content = vector<string>();
 
     fseek(newFile, 0, SEEK_END);
-    long fsize = ftell(newFile);
+    long size = ftell(newFile);
     fseek(newFile, 0, SEEK_SET);
-    string content((unsigned long) fsize, '\0');
-    fread(&content, (size_t) fsize, 1, newFile);
+    string content((unsigned long) size, '\0');
+    fread(&content[0], (size_t) size, 1, newFile);
     fclose(newFile);
 
     long subStr = content.length() / br.cluster_size;
@@ -95,12 +95,13 @@ void fat::implementFile(char *name) {
     if (content.length() % br.cluster_size != 0) {
         split_content.push_back(content.substr((unsigned long) (br.cluster_size * subStr)));
     }
-    int size = 0;
+
+    vector<int> freeClusters = vector<int>();
     for (int i = 0; i < br.usable_cluster_count; i++) {
-        if (f[i]==FAT_UNUSED) size++;
-        else if(size==split_content.size()) break;
+        if (f[i]==FAT_UNUSED) freeClusters.push_back(i);
+        if(freeClusters.size()==split_content.size()) break;
     }
-    if (size < split_content.size()){
+    if (freeClusters.size() < split_content.size()){
         cout << "NOT ENOUGH SPACE" << endl;
         return;
     }
@@ -111,25 +112,31 @@ void fat::implementFile(char *name) {
     memset(newDir.name, '\0', sizeof(newDir.name));
     newDir.is_file = 1;
     strcpy(newDir.name, name);
-    newDir.size = (int32_t) fsize;
-//
-//    for (int i = 0; i < br.usable_cluster_count; ++i) {
-//        if (f[i]==FAT_UNUSED) {
-//            newDir.start_cluster = i;
-//            f[i]=FAT_DIRECTORY;
-//            break;
-//        }
-//    }
-//
-//    fwrite(&newDir, sizeof(newDir), 1, p_file);
-//
-//    fseek(p_file, sizeof(boot_record), SEEK_SET);
-//    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
-//    cout << "OK" << endl;
-//
-//    fclose(p_file);
-//    init();
+    newDir.size = (int32_t) size;
+    newDir.start_cluster = freeClusters.at(0);
 
+    fwrite(&newDir, sizeof(newDir), 1, p_file);
+
+    for (int i = (int) (freeClusters.size() - 1); i >= 0; i--) {
+        if(i==freeClusters.size()-1) f[freeClusters.at((unsigned long) i)] = FAT_FILE_END;
+        else f[freeClusters.at((unsigned long) i)] = freeClusters.at((unsigned long) (i + 1));
+
+        char cluster[br.cluster_size];
+        memset(cluster, '\0', sizeof(cluster));
+        strcpy(cluster, split_content.at((unsigned long) i).c_str());
+
+        fsetpos(p_file, &default_data_position);
+        fseek(p_file, br.cluster_size*f[freeClusters.at((unsigned long) i)], SEEK_CUR);
+        fwrite(&cluster, sizeof(cluster), 1, p_file);
+    }
+
+
+    fseek(p_file, sizeof(boot_record), SEEK_SET);
+    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+    cout << "OK" << endl;
+
+    fclose(p_file);
+    init();
 }
 
 //
@@ -896,3 +903,9 @@ char* fat::nameToUpper(char *name){
     return ret;
 }
 
+/**
+ * Funkce provadejici defragmentaci celeho FAT souboru
+ */
+void fat::defragment(){
+
+}

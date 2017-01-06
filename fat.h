@@ -42,6 +42,7 @@ class fat {
     int max_dir_num;
     char *FAT_FILE;
 
+    struct boot_record *p_boot_record;
     FILE *p_file;
     fpos_t default_data_position;
 
@@ -53,30 +54,9 @@ class fat {
     std::string ss = "";
     //pointery na struktury root a boot
 
-public:
-    struct boot_record *p_boot_record;
-
-    fat(char *file);
-
     void init();
 
     void reset();
-
-    void list();
-
-    char *appendCharToCharArray(char* array, char a);
-
-    char *removeCharToCharArray(char *array);
-
-    void writeDir();
-
-    void getClusters(char *string);
-
-    char *nameToUpper(char *name);
-
-    void fileContent(char *string);
-
-    void findPath(std::string str, char *string, char *string1);
 
     void implementDir(char *name);
 
@@ -84,11 +64,33 @@ public:
 
     void implementFile(char *name);
 
+    void removeFile(directory *dir);
+
+    char *appendCharToCharArray(char* array, char a);
+
+    char *removeCharToCharArray(char *array);
+
+    char *nameToUpper(char *name);
+
+    void writeDir();
+
+public:
+
+    fat(char *file);
+
+    void list();
+
+    void getClusters(char *string);
+
+    void fileContent(char *string);
+
+    void findPath(std::string str, char *string, char *string1);
+
     void findRemoveDir(char *path);
 
     void findRemoveFile(char *path);
 
-    void removeFile(directory *dir);
+    void defragment();
 };
 
 
