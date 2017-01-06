@@ -6,7 +6,13 @@ using namespace std;
 
 bool DEBUG = false;
 
-fat::fat() {
+/**
+ * Defaultni nastaveni FAT souboru
+ * @param file nazev fatky
+ */
+fat::fat(char *file) {
+    this->FAT_FILE = file;
+
     br.fat_type = 8;
     br.fat_copies = 2;
     br.cluster_size = 256;
@@ -17,7 +23,8 @@ fat::fat() {
     strcpy(br.volume_descriptor, "Super drsnej FAT system yolo, musim to udelat rychle protoze UPS");
     strcpy(br.signature, "lukad");
 
-    reset();
+    if (DEBUG) reset();
+
     init();
 }
 
@@ -25,15 +32,14 @@ void fat::init() {
     p_boot_record = (struct boot_record *) malloc(sizeof(struct boot_record));
 
     //otevru soubor a pro jistotu skocim na zacatek
-    p_file = fopen("linux.fat", "r");
+    p_file = fopen(FAT_FILE, "r+");
     fseek(p_file, 0, SEEK_SET);
 
     //prectu boot a fat tabulku s vsemi copies
     fread(p_boot_record, sizeof(struct boot_record), 1, p_file);
-    f = (int32_t*) malloc(sizeof(int32_t)*br.usable_cluster_count);
-    for (int k = 0; k < br.fat_copies; ++k) {
-        fread(f, sizeof(f)*br.usable_cluster_count, 1, p_file);
-    }
+    f = (int32_t*) malloc(sizeof(int32_t)*br.usable_cluster_count*br.fat_copies);
+
+    fread(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file); //TODO: TADY JE BORDEL LINUX VS WINDOWS sizeof(f)!!!!!!!!
 
     if (DEBUG) {
         printf("-------------------------------------------------------- \n");
@@ -54,13 +60,205 @@ void fat::init() {
     max_dir_num = br.cluster_size/sizeof(directory);
 }
 
-void fat::createDirectory(char *string, char *string1) {
+//
+//  1. Ukol - Zkopirovani souboru do FAT
+//
+
+void fat::implementFile(char *name) {
+    cout<<"Som tu" << endl;
+    FILE *newFile = fopen(name, "r");
+//
+//    directory newDir;
+//    name[sizeof(newDir.name)] = '\0';
+//
+//    memset(newDir.name, '\0', sizeof(newDir.name));
+//    newDir.is_file = 0;
+//    strcpy(newDir.name, name);
+//    newDir.size = 0;
+//
+//    for (int i = 0; i < br.usable_cluster_count; ++i) {
+//        if (f[i]==FAT_UNUSED) {
+//            newDir.start_cluster = i;
+//            f[i]=FAT_DIRECTORY;
+//            break;
+//        }
+//    }
+//
+//    fwrite(&newDir, sizeof(newDir), 1, p_file);
+//
+//    fseek(p_file, sizeof(boot_record), SEEK_SET);
+//    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+//    cout << "OK" << endl;
+//
+//    fclose(p_file);
+//    init();
+
+}
+
+//
+//  2. Ukol - Smazani souboru
+//
+
+void fat::removeFile(char *path) {
+    fsetpos(p_file, &default_data_position);
+
+    fpos_t deletingDirPos;
+    char *split = strtok(path, "/");
+
+    if (split==NULL){
+        cout << "PATH NOT FOUND" << endl;
+        return;
+    }
+
+    directory *children = (directory *) malloc(sizeof(struct directory));
+
+    for (int i = 0; i < max_dir_num; i++) {
+        fread(children, sizeof(struct directory), 1, p_file);
+        if (children->start_cluster!=0 && strcmp(children->name, split)==0) {
+            fgetpos(p_file, &deletingDirPos);
+
+            if (children->is_file){
+                char cluster_empty[br.cluster_size];
+                memset(cluster_empty, '\0', sizeof(cluster_empty));
+
+                int32_t x = children->start_cluster;
+                int32_t temp;
+
+                while(x!=FAT_FILE_END){
+                    fsetpos(p_file, &default_data_position);
+                    fseek(p_file, br.cluster_size*x, SEEK_CUR);
+                    fwrite(&cluster_empty, (size_t) br.cluster_size, 1, p_file);
+                    temp = x;
+                    x = f[x];
+                    f[temp] = FAT_UNUSED;
+                }
+
+                fsetpos(p_file, &deletingDirPos);
+                fseek(p_file, -sizeof(directory), SEEK_CUR);
+                char buffer[] = {'\0'};
+                for (int16_t j = 0; j < sizeof(directory); j++)
+                    fwrite(buffer, sizeof(buffer), 1, p_file);
+
+                fseek(p_file, sizeof(boot_record), SEEK_SET);
+                fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+                cout << "OK" << endl;
+
+                fclose(p_file);
+                init();
+
+                free(children);
+                return;
+            }
+            split = strtok(NULL, "/");
+            fsetpos(p_file, &default_data_position);
+            fseek(p_file, br.cluster_size*children->start_cluster, SEEK_CUR);
+        }
+    }
+    free(children);
+    cout << "PATH NOT FOUND" << endl;
+}
+
+//
+//  3. Ukol - Nalezeni souboru a vypis clusteru
+//
+
+/**
+ * Vypisuje vsechny clustery, na kterych se vyskytuje obsah souboru
+ * @param string cesta k souboru
+ */
+void fat::getClusters(char *string) {
     fsetpos(p_file, &default_data_position);
     directory *dir = (directory *) malloc(sizeof(struct directory));
 
-    char *split = strtok(string1, "/");
+    char *split = strtok(string, "/");
 
     for (int j = 0; j < max_dir_num; j++) {
+        fread(dir, sizeof(struct directory), 1, p_file);
+        if (dir->start_cluster!=0 && strcmp(dir->name, split)==0) {
+            if (dir->is_file){
+                stringstream ss;
+                int32_t x = f[dir->start_cluster];
+                ss << dir->start_cluster;
+                while(x!=FAT_FILE_END){
+                    ss << ":" << x;
+                    x = f[x];
+                }
+
+                cout << split << " " << ss.str() << endl;
+                free(dir);
+                return;
+            }
+            split = strtok(NULL, "/");
+            if (split==NULL) break;
+            fsetpos(p_file, &default_data_position);
+            fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
+            j=-1;
+        }
+    }
+    free(dir);
+    cout << "PATH NOT FOUND" << endl;
+}
+
+
+//
+//  4. Ukol - Vytvoreni noveho adresare
+//
+
+/**
+ * Vytvoreni noveho adresare, zapis do FAT,
+ * @param name nazev
+ * @param cluster cislo clusteru
+ * @param dirPos volna pozice v clusteru
+ */
+void fat::implementDir(char *name) {
+    directory newDir;
+    name[sizeof(newDir.name)] = '\0';
+
+    memset(newDir.name, '\0', sizeof(newDir.name));
+    newDir.is_file = 0;
+    strcpy(newDir.name, name);
+    newDir.size = 0;
+
+    for (int i = 0; i < br.usable_cluster_count; ++i) {
+        if (f[i]==FAT_UNUSED) {
+            newDir.start_cluster = i;
+            f[i]=FAT_DIRECTORY;
+            break;
+        }
+    }
+
+    fwrite(&newDir, sizeof(newDir), 1, p_file);
+
+    fseek(p_file, sizeof(boot_record), SEEK_SET);
+    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+    cout << "OK" << endl;
+
+    fclose(p_file);
+    init();
+}
+
+//
+//  5. Ukol - Smazani adresare
+//
+
+/**
+ * Smaze prazdny adresar
+ * @param path cesta k adresari
+ */
+void fat::findRemoveDir(char *path) {
+    fsetpos(p_file, &default_data_position);
+
+    fpos_t deletingDirPos;
+    char *split = strtok(path, "/");
+
+    if (split==NULL){
+        cout << "PATH NOT FOUND" << endl;
+        return;
+    }
+
+    directory *dir = (directory *) malloc(sizeof(struct directory));
+
+    for (int i = 0; i < max_dir_num; i++) {
         fread(dir, sizeof(struct directory), 1, p_file);
         if (dir->start_cluster!=0 && strcmp(dir->name, split)==0) {
             if (dir->is_file){
@@ -69,39 +267,59 @@ void fat::createDirectory(char *string, char *string1) {
                 return;
             }
             split = strtok(NULL, "/");
+            fgetpos(p_file, &deletingDirPos);
             fsetpos(p_file, &default_data_position);
             fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
+
             if (split==NULL) {
-                implementDir(string);
+                directory *headers = (directory *) malloc(sizeof(directory));
+                for (int j = 0; j < max_dir_num; j++) {
+                    fread(headers, sizeof(directory), 1, p_file);
+                    if (headers->start_cluster != 0) {
+                        cout << "PATH NOT EMPTY!" << endl;
+                        break;
+                    }
+                    if (j==max_dir_num-1){
+                        fsetpos(p_file, &deletingDirPos);
+                        fseek(p_file, -sizeof(directory), SEEK_CUR);
+                        removeDir(dir);
+                        break;
+                    }
+                }
+                free(headers);
                 free(dir);
                 return;
             }
-            j=-1;
+            i=-1;
         }
     }
     free(dir);
     cout << "PATH NOT FOUND" << endl;
+}
+
+void fat::removeDir(directory *dir) {
+    f[dir->start_cluster] = FAT_UNUSED;
+
+    char buffer[] = {'\0'};
+    for (int16_t i = 0; i < sizeof(directory); i++)
+        fwrite(buffer, sizeof(buffer), 1, p_file);
+
+    fseek(p_file, sizeof(boot_record), SEEK_SET);
+    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+    cout << "OK" << endl;
+
     fclose(p_file);
+    init();
 }
 
-void fat::implementDir(char *string) {
-    directory newDir;
-    memset(newDir.name, '\0', sizeof(newDir.name));
-    newDir.is_file = 0;
-    strcpy(newDir.name,string);
-    newDir.size = 0;
+//
+//  6. Ukol - Nalezeni souboru a vypis jeho obsahu
+//
 
-    for (int i = 0; i < br.usable_cluster_count; ++i) {
-        if (f[i]==FAT_UNUSED) {
-            newDir.start_cluster = i;
-            f[i] = FAT_DIRECTORY;
-            break;
-        }
-    }
-
-
-}
-
+/**
+ *  Vypisuje obsah nalezeneho souboru na zadane ceste
+ * @param string cesta k souboru
+ */
 void fat::fileContent(char *string) {
     fsetpos(p_file, &default_data_position);
     directory *dir = (directory *) malloc(sizeof(struct directory));
@@ -138,48 +356,22 @@ void fat::fileContent(char *string) {
     cout << "PATH NOT FOUND" << endl;
 }
 
-void fat::getClusters(char *string) {
-    fsetpos(p_file, &default_data_position);
-    directory *dir = (directory *) malloc(sizeof(struct directory));
+//
+//   7. Ukol - Funkce pro vypsani adresarove struktury.
+//
 
-    char *split = strtok(string, "/");
-
-    for (int j = 0; j < max_dir_num; j++) {
-        fread(dir, sizeof(struct directory), 1, p_file);
-        if (dir->start_cluster!=0 && strcmp(dir->name, split)==0) {
-            if (dir->is_file){
-                stringstream ss;
-                int32_t x = f[dir->start_cluster];
-                ss << dir->start_cluster;
-                while(x!=FAT_FILE_END){
-                    ss << ":" << x;
-                    x = f[x];
-                }
-
-                cout << split << " " << ss.str() << endl;
-                free(dir);
-                return;
-            }
-            split = strtok(NULL, "/");
-            if (split==NULL) break;
-            fsetpos(p_file, &default_data_position);
-            fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
-            j=-1;
-        }
-    }
-    free(dir);
-    cout << "PATH NOT FOUND" << endl;
-}
-
+/**
+ *  Zacatek vypisu z rootu definujici zakladni adresar fatky
+ */
 void fat::list() {
     fsetpos(p_file, &default_data_position);
+
     escape_tabs = (char *) "\t";
     directory *dir = (directory *) malloc(sizeof(struct directory));
     bool empty=true;
 
     for (int j = 0; j < max_dir_num; j++) {
         fread(dir, sizeof(struct directory), 1, p_file);
-
         if (dir->start_cluster!=0 && dir->is_file) {
             if (empty) cout << "+ROOT" << endl;
             empty = false;
@@ -192,8 +384,8 @@ void fat::list() {
             fpos_t position;
             fgetpos (p_file, &position);
             fsetpos(p_file, &default_data_position);
-                fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
-                writeDir();
+            fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
+            writeDir();
             fsetpos (p_file, &position);
         }
     }
@@ -208,10 +400,13 @@ void fat::list() {
     free(dir);
 }
 
+/**
+ *  Rekurzivni vypis adresaru se vsemi daty v nich
+ */
 void fat::writeDir(){
-    directory *dir = (directory *) malloc(sizeof(struct directory));
+    directory *dir = (directory *) malloc(sizeof(directory));
     for (int j = 0; j < max_dir_num; j++) {
-        fread(dir, sizeof(struct directory), 1, p_file);
+        fread(dir, sizeof(directory), 1, p_file);
 
         if (dir->start_cluster!=0 && dir->is_file) {
             printf("%s-%s %d %d\n ", escape_tabs, dir->name, dir->start_cluster, (int) ceil((double)dir->size / br.cluster_size));
@@ -231,6 +426,13 @@ void fat::writeDir(){
     free(dir);
 }
 
+//
+// Pomocne funkce
+//
+
+/**
+ *  Automaticky reset fatky do defaultniho nastaveni. Pouzivane pro debugovani a rychle upravy.
+ */
 void fat::reset() {
     //directory - vytvoreni polozek
     memset(root_a.name, '\0', sizeof(root_a.name));
@@ -446,7 +648,7 @@ void fat::reset() {
 
 /////////// KONEC VYTVARENI FAT TABULKY
 
-    FILE *fp = fopen("linux.fat", "w");
+    FILE *fp = fopen(FAT_FILE, "w");
     //boot record
     fwrite(&br, sizeof(br), 1, fp);
     // 2x FAT
@@ -527,6 +729,87 @@ void fat::reset() {
     fclose(fp);
 }
 
+/**
+ * Vyhleda cestu do adresare. Zkontroluje zda-li je v adresari volne misto, nastavi ukazatel na toto volne misto.
+ *
+ * @param str volana funkce
+ * @param name nazev souboru/adresare
+ * @param path cesta
+ */
+void fat::findPath(std::string str, char *name, char *path) {
+    fsetpos(p_file, &default_data_position);
+
+    directory *dir = (directory *) malloc(sizeof(struct directory));
+
+    char *split = strtok(path, "/");
+    if (split==NULL){
+        directory *headers = (directory *) malloc(sizeof(directory));
+        for (int j = 0; j < max_dir_num; j++) {
+            fread(headers, sizeof(directory), 1, p_file);
+            if (headers->start_cluster == 0) {
+                fseek(p_file, (long) (-sizeof(directory)), SEEK_CUR);
+
+                if (str == "-a") implementFile(name);
+                else if (str == "-m") implementDir(name);
+
+                break;
+            }
+            if (j==max_dir_num-1){
+                cout << "NOT ENOUGH SPACE IN THIS DIRECTORY!" << endl;
+                break;
+            }
+        }
+        free(headers);
+        free(dir);
+        return;
+    }
+
+    for (int i = 0; i < max_dir_num; i++) {
+        fread(dir, sizeof(struct directory), 1, p_file);
+        if (dir->start_cluster!=0 && strcmp(dir->name, split)==0) {
+            if (dir->is_file){
+                cout << "PATH TO THE FILE IS NOT SUPPORTED" << endl;
+                free(dir);
+                return;
+            }
+            split = strtok(NULL, "/");
+            fsetpos(p_file, &default_data_position);
+            fseek(p_file, br.cluster_size*dir->start_cluster, SEEK_CUR);
+
+            if (split==NULL) {
+                directory *headers = (directory *) malloc(sizeof(directory));
+                for (int j = 0; j < max_dir_num; j++) {
+                    fread(headers, sizeof(directory), 1, p_file);
+                    if (headers->start_cluster == 0) {
+                        fseek(p_file, (long) (-sizeof(directory)), SEEK_CUR);
+
+                        if (str == "-a") implementFile(name);
+                        else if (str == "-m") implementDir(name);
+
+                        break;
+                    }
+                    if (j==max_dir_num-1){
+                        cout << "NOT ENOUGH SPACE IN THIS DIRECTORY!" << endl;
+                        break;
+                    }
+                }
+                free(headers);
+                free(dir);
+                return;
+            }
+            i=-1;
+        }
+    }
+    free(dir);
+    cout << "PATH NOT FOUND" << endl;
+}
+
+/**
+ *  Pridava na konec pole novy znak. Uzivane pro odradkovavani pomoci /t
+ * @param array pole znaku
+ * @param a pridavany znak
+ * @return nove pole
+ */
 char* fat::appendCharToCharArray(char* array, char a) {
     size_t len = strlen(array);
 
@@ -539,15 +822,26 @@ char* fat::appendCharToCharArray(char* array, char a) {
     return ret;
 }
 
+/**
+ * Odstranuje z pole koncovy znak.
+ * @param array pole
+ * @return nove pole
+ */
 char* fat::removeCharToCharArray(char* array) {
     size_t len = strlen(array);
     array[len-1] = '\0';
     return array;
 }
 
+/**
+ * Prevadi jmena na velka pismena
+ * @param name jmeno
+ * @return uppercase jmeno
+ */
 char* fat::nameToUpper(char *name){
     char *ret = new char[strlen(name)];
     for (int i=0; i<strlen(name); ++i) ret[i] = (char) toupper(name[i]);
     ret[strlen(name)] = '\0';
     return ret;
 }
+
