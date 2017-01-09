@@ -104,8 +104,10 @@ void fat::implementFile(char *name) {
     }
 
     directory newDir;
+    for (int j = (int) (strlen(name) - 4); j < strlen(name); j++) {
+        strcpy(&name[sizeof(newDir.name)-(strlen(name)-j)], &name[j]);
+    }
     name[sizeof(newDir.name)] = '\0';
-
     memset(newDir.name, '\0', sizeof(newDir.name));
     newDir.is_file = 1;
     strcpy(newDir.name, name);
@@ -760,10 +762,10 @@ void fat::reset() {
     ac_size =0;
     fwrite(&cluster_empty, sizeof(cluster_empty), 1, fp);
     //neprazdny adresar
-    fwrite(&root_e, sizeof(root_e), 1, fp);
-    ac_size += sizeof(root_e);
     fwrite(&root_c, sizeof(root_c), 1, fp);
     ac_size += sizeof(root_c);
+    fwrite(&root_e, sizeof(root_e), 1, fp);
+    ac_size += sizeof(root_e);
     for (int16_t i = 0; i < (cl_size - ac_size); i++)
         fwrite(buffer, sizeof(buffer), 1, fp);
     ac_size =0;
@@ -775,10 +777,10 @@ void fat::reset() {
     //druha cast msg.txt
     fwrite(&cluster_b24, sizeof(cluster_b24), 1, fp);
     //dalsi neprazdny adresar
-    fwrite(&root_f, sizeof(root_f), 1, fp);
-    ac_size += sizeof(root_f);
     fwrite(&root_b, sizeof(root_b), 1, fp);
     ac_size += sizeof(root_b);
+    fwrite(&root_f, sizeof(root_f), 1, fp);
+    ac_size += sizeof(root_f);
     for (int16_t i = 0; i < (cl_size - ac_size); i++)
         fwrite(buffer, sizeof(buffer), 1, fp);
     //zbytek disku budou 0
