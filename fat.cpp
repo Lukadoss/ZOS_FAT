@@ -18,8 +18,8 @@ fat::fat(char *file) {
 
     memset(br.volume_descriptor, '\0', sizeof(br.volume_descriptor));
     memset(br.signature, '\0', sizeof(br.signature));
-    strcpy(br.volume_descriptor, "Super drsnej FAT system yolo, musim to udelat rychle protoze UPS");
-    strcpy(br.signature, "lukad");
+    strcpy(br.volume_descriptor, "Super drsnej FAT system, musim to udelat rychle protoze UPS taky nepocka");
+    strcpy(br.signature, "plukasik");
 
     if (DEBUG) reset();
     init();
@@ -802,8 +802,8 @@ void fat::findPath(std::string str, char *name, char *path) {
     fsetpos(p_file, &default_data_position);
 
     directory *dir = (directory *) malloc(sizeof(struct directory));
+    char *split;
 
-    char *split = strtok(path, "/");
     if (split==NULL){
         directory *headers = (directory *) malloc(sizeof(directory));
         for (int j = 0; j < max_dir_num; j++) {
@@ -970,6 +970,11 @@ void fat::defragment(){
 
 }
 
+/**
+ * Navraci jmeno pro adresar v danem miste fat tabulky
+ * @param pos pozice ve fat tabulce
+ * @return nazev adresare
+ */
 char *fat::getDirName(int pos){
     directory *dir = (directory *) malloc(sizeof(directory));
     for (int j = 0; j < max_dir_num; j++) {
@@ -992,6 +997,11 @@ char *fat::getDirName(int pos){
     return (char *) "DIRECTORY_NOT_FOUND";
 }
 
+/**
+ * Navraci jmeno pro soubor v danem miste fat tabulky
+ * @param pos pozice ve fat tabulce
+ * @return nazev souboru
+ */
 char *fat::getFileName(int pos){
     directory *dir = (directory *) malloc(sizeof(directory));
     for (int j = 0; j < max_dir_num; j++) {
@@ -1018,6 +1028,10 @@ char *fat::getFileName(int pos){
     return (char *) "FILE_NOT_FOUND";
 }
 
+/**
+ * Vytahuje a uklada obsah adresaru a hlavicky souboru do map a vektoru.
+ * @param x pomocne cislo pro mapu
+ */
 void fat::getDirectoryMap(int x){
     directory *dir = (directory *) malloc(sizeof(directory));
     vector<directory> dirCont;
@@ -1044,7 +1058,9 @@ void fat::getDirectoryMap(int x){
     directoryClustersMap.insert(pair<int, vector<struct directory>>(x ,dirCont));
     free(dir);
 }
-
+/**
+ * Vytahuje data ze souborů a ukládá je do map. Při uložení se automaticky maže obsah v dané části clusteru.
+ */
 void fat::getFileMap(){
     directory *dir = (directory *) malloc(sizeof(directory));
 
@@ -1088,6 +1104,9 @@ void fat::getFileMap(){
     free(dir);
 }
 
+/**
+ * Vypisuje stav fat tabulky a výskyt jednotlivých souborů/adresářů na daných clusterech
+ */
 void fat::writeFatStatus() {
     cout << "FAT FILE STATUS" << endl;
     cout << "----------------------" << endl;
