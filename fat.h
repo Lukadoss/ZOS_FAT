@@ -35,7 +35,7 @@ class fat {
         int32_t start_cluster;          //počáteční cluster položky
     };// 24B
 
-    //pocitame s FAT32 MAX - tedy horni 4 hodnoty
+    //pocitame s FAT32 MAX - tedy horni 3 hodnoty
     const static int32_t FAT_UNUSED = INT32_MAX - 1;
     const static int32_t FAT_FILE_END = INT32_MAX - 2;
     const static int32_t FAT_DIRECTORY = INT32_MAX - 3;
