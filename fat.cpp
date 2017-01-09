@@ -14,7 +14,7 @@ fat::fat(char *file) {
     br.fat_type = 8;
     br.fat_copies = 2;
     br.cluster_size = 256;
-    br.usable_cluster_count = 251;
+    br.usable_cluster_count = 252;
 
     memset(br.volume_descriptor, '\0', sizeof(br.volume_descriptor));
     memset(br.signature, '\0', sizeof(br.signature));
