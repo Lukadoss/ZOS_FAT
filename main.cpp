@@ -2,13 +2,23 @@
 #include "fat.h"
 
 using namespace std;
+bool create = false;
 
 int main(int argc, char* argv[]) {
     if (argc < 3) {
         cout << "Not enough arguments. Program will now end" << endl;
         return 1;
     }
-    fat fatka(argv[1]);
+
+    if (strcmp(argv[2], "-create")==0) create = true;
+
+    fat fatka(argv[1], create);
+
+    if(create){
+        cout<<"FAT FILE CREATED"<<endl;
+        return 0;
+    }
+
     int i = 2;
     while(i<argc) {
         string arg = argv[i];

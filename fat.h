@@ -5,11 +5,8 @@
 #ifndef SEMESTRALKA_FAT_H
 #define SEMESTRALKA_FAT_H
 
-#include <cstdlib>
-#include <cstdint>
 #include <iostream>
 #include <string.h>
-#include <cstdint>
 #include <stdio.h>
 #include <stdint.h>
 #include <math.h>
@@ -58,8 +55,6 @@ class fat {
 
     void init();
 
-    void reset();
-
     void implementDir(char *name);
 
     void removeDir(directory *dir);
@@ -89,7 +84,9 @@ class fat {
 
 public:
 
-    fat(char *file);
+    fat(char *file, bool create);
+
+    void reset();
 
     void list();
 

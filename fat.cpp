@@ -8,7 +8,7 @@ bool DEBUG = false;
  * Defaultni nastaveni FAT souboru
  * @param file nazev fatky
  */
-fat::fat(char *file) {
+fat::fat(char *file, bool create) {
     this->FAT_FILE = file;
 
     br.fat_type = 8;
@@ -20,8 +20,7 @@ fat::fat(char *file) {
     memset(br.signature, '\0', sizeof(br.signature));
     strcpy(br.volume_descriptor, "Super drsnej FAT system, musim to udelat rychle protoze UPS taky nepocka");
     strcpy(br.signature, "plukasik");
-
-    if (DEBUG) reset();
+    if(create) reset();
     init();
 }
 
@@ -102,15 +101,22 @@ void fat::implementFile(char *name) {
         cout << "NOT ENOUGH SPACE" << endl;
         return;
     }
-
-    directory newDir;
-    for (int j = (int) (strlen(name) - 4); j < strlen(name); j++) {
-        strcpy(&name[sizeof(newDir.name)-(strlen(name)-j)], &name[j]);
+    char *token = strtok(name, "/");
+    while(token != NULL) {
+        name = token;
+        token = strtok(NULL, "/");
     }
-    name[sizeof(newDir.name)] = '\0';
+    directory newDir;
+    if (strlen(name)>sizeof(newDir.name)-1) {
+        for (int j = (int) (strlen(name) - 4); j < strlen(name); j++) {
+            strcpy(&name[sizeof(newDir.name) - 1 - (strlen(name) - j)], &name[j]);
+        }
+    }
+
+    name[sizeof(newDir.name)-1] = '\0';
     memset(newDir.name, '\0', sizeof(newDir.name));
-    newDir.is_file = 1;
     strcpy(newDir.name, name);
+    newDir.is_file = 1;
     newDir.size = (int32_t) size;
     newDir.start_cluster = freeClusters.at(0);
 
@@ -802,7 +808,7 @@ void fat::findPath(std::string str, char *name, char *path) {
     fsetpos(p_file, &default_data_position);
 
     directory *dir = (directory *) malloc(sizeof(struct directory));
-    char *split;
+    char *split = strtok(path, "/");
 
     if (split==NULL){
         directory *headers = (directory *) malloc(sizeof(directory));
