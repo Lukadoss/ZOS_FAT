@@ -166,7 +166,9 @@ void fat::findRemoveFile(char *path) {
 
     for (int i = 0; i < max_dir_num; i++) {
         fread(children, sizeof(struct directory), 1, p_file);
-        if (children->start_cluster!=0 && strcmp(children->name, split)==0) {
+        char *dirName = nameToUpper(children->name);
+        split = nameToUpper(split);
+        if (children->start_cluster!=0 && strcmp(dirName, split)==0) {
             if (children->is_file){
                 removeFile(children);
                 free(children);
@@ -234,7 +236,9 @@ void fat::getClusters(char *string) {
 
     for (int j = 0; j < max_dir_num; j++) {
         fread(dir, sizeof(struct directory), 1, p_file);
-        if (dir->start_cluster!=0 && strcmp(dir->name, split)==0) {
+        char *dirName = nameToUpper(dir->name);
+        split = nameToUpper(split);
+        if (dir->start_cluster!=0 && strcmp(dirName, split)==0) {
             if (dir->is_file){
                 stringstream ss;
                 int32_t x = f[dir->start_cluster];
@@ -320,7 +324,9 @@ void fat::findRemoveDir(char *path) {
 
     for (int i = 0; i < max_dir_num; i++) {
         fread(dir, sizeof(struct directory), 1, p_file);
-        if (dir->start_cluster!=0 && strcmp(dir->name, split)==0) {
+        char *dirName = nameToUpper(dir->name);
+        split = nameToUpper(split);
+        if (dir->start_cluster!=0 && strcmp(dirName, split)==0) {
             if (dir->is_file){
                 cout << "PATH TO THE FILE IS NOT SUPPORTED" << endl;
                 free(dir);
@@ -392,7 +398,9 @@ void fat::fileContent(char *string) {
 
     for (int j = 0; j < max_dir_num; j++) {
         fread(dir, sizeof(struct directory), 1, p_file);
-        if (dir->start_cluster!=0 && strcmp(dir->name, split)==0) {
+        char *dirName = nameToUpper(dir->name);
+        split = nameToUpper(split);
+        if (dir->start_cluster!=0 && strcmp(dirName, split)==0) {
             if (dir->is_file){
                 char *text = (char *) malloc(sizeof(char) * br.cluster_size);
                 int32_t x = dir->start_cluster;
@@ -832,9 +840,12 @@ void fat::findPath(std::string str, char *name, char *path) {
         return;
     }
 
+
     for (int i = 0; i < max_dir_num; i++) {
         fread(dir, sizeof(struct directory), 1, p_file);
-        if (dir->start_cluster!=0 && strcmp(dir->name, split)==0) {
+        char *dirName = nameToUpper(dir->name);
+        split = nameToUpper(split);
+        if (dir->start_cluster!=0 && strcmp(dirName, split)==0) {
             if (dir->is_file){
                 cout << "PATH TO THE FILE IS NOT SUPPORTED" << endl;
                 free(dir);
