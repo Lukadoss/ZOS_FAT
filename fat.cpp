@@ -11,14 +11,14 @@ bool DEBUG = false;
 fat::fat(char *file, bool create) {
     this->FAT_FILE = file;
 
-    br.fat_type = 8;
+    br.fat_type = 12;
     br.fat_copies = 2;
-    br.cluster_size = 256;
-    br.usable_cluster_count = 252;
+    br.cluster_size = 512;
+    br.usable_cluster_count = (int32_t) pow(2, br.fat_type)-3;
 
     memset(br.volume_descriptor, '\0', sizeof(br.volume_descriptor));
     memset(br.signature, '\0', sizeof(br.signature));
-    strcpy(br.volume_descriptor, "Super drsnej FAT system, musim to udelat rychle protoze UPS taky nepocka");
+    strcpy(br.volume_descriptor, "Super drsnej FAT system od Lukada");
     strcpy(br.signature, "plukasik");
     if(create) reset();
     init();
@@ -30,15 +30,15 @@ fat::fat(char *file, bool create) {
 void fat::init() {
     p_boot_record = (struct boot_record *) malloc(sizeof(struct boot_record));
 
-    //otevru soubor a pro jistotu skocim na zacatek
     p_file = fopen(FAT_FILE, "r+");
     fseek(p_file, 0, SEEK_SET);
 
-    //prectu boot a fat tabulku s vsemi copies
     fread(p_boot_record, sizeof(struct boot_record), 1, p_file);
-    f = (int32_t*) malloc(sizeof(int32_t)*br.usable_cluster_count*br.fat_copies);
+    f = (int32_t*) malloc(sizeof(int32_t)*br.usable_cluster_count);
 
-    fread(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+    for (int j = 0; j < br.fat_copies; ++j) {
+        fread(f, sizeof(int32_t)*br.usable_cluster_count, 1, p_file);
+    }
 
     if (DEBUG) {
         printf("-------------------------------------------------------- \n");
@@ -122,22 +122,28 @@ void fat::implementFile(char *name) {
 
     fwrite(&newDir, sizeof(newDir), 1, p_file);
 
-    for (int i = (int) (freeClusters.size() - 1); i >= 0; i--) {
-        if(i==freeClusters.size()-1) f[freeClusters.at((unsigned long) i)] = FAT_FILE_END;
-        else f[freeClusters.at((unsigned long) i)] = freeClusters.at((unsigned long) (i + 1));
+    for (int i = (int) freeClusters.size()-1; i >= 0; i--) {
+        if(i==freeClusters.size()-1) {
+            f[freeClusters.at((unsigned long) i)] = FAT_FILE_END;
+        }
+        else {
+            f[freeClusters.at((unsigned long) i)] = freeClusters.at((unsigned long) (i + 1));
+        }
 
         char cluster[br.cluster_size];
         memset(cluster, '\0', sizeof(cluster));
         strcpy(cluster, split_content.at((unsigned long) i).c_str());
-
         fsetpos(p_file, &default_data_position);
-        fseek(p_file, br.cluster_size*f[freeClusters.at((unsigned long) i)], SEEK_CUR);
+        fseek(p_file, br.cluster_size*freeClusters.at((unsigned long) i), SEEK_CUR);
         fwrite(&cluster, sizeof(cluster), 1, p_file);
+
     }
 
 
     fseek(p_file, sizeof(boot_record), SEEK_SET);
-    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+    for (int i = 0; i < br.fat_copies; ++i) {
+        fwrite(f, sizeof(int32_t)*br.usable_cluster_count, 1, p_file);
+    }
     cout << "OK" << endl;
 
     fclose(p_file);
@@ -213,7 +219,9 @@ void fat::removeFile(directory *children) {
         fwrite(buffer, sizeof(buffer), 1, p_file);
 
     fseek(p_file, sizeof(boot_record), SEEK_SET);
-    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+    for (int i = 0; i < br.fat_copies; ++i) {
+        fwrite(f, sizeof(int32_t)*br.usable_cluster_count, 1, p_file);
+    }
     cout << "OK" << endl;
 
     fclose(p_file);
@@ -233,6 +241,11 @@ void fat::getClusters(char *string) {
     directory *dir = (directory *) malloc(sizeof(struct directory));
 
     char *split = strtok(string, "/");
+
+    if (split==NULL){
+        cout << "PATH NOT FOUND" << endl;
+        return;
+    }
 
     for (int j = 0; j < max_dir_num; j++) {
         fread(dir, sizeof(struct directory), 1, p_file);
@@ -294,7 +307,9 @@ void fat::implementDir(char *name) {
     fwrite(&newDir, sizeof(newDir), 1, p_file);
 
     fseek(p_file, sizeof(boot_record), SEEK_SET);
-    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+    for (int i = 0; i < br.fat_copies; ++i) {
+        fwrite(f, sizeof(int32_t)*br.usable_cluster_count, 1, p_file);
+    }
     cout << "OK" << endl;
 
     fclose(p_file);
@@ -375,7 +390,9 @@ void fat::removeDir(directory *dir) {
         fwrite(buffer, sizeof(buffer), 1, p_file);
 
     fseek(p_file, sizeof(boot_record), SEEK_SET);
-    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+    for (int i = 0; i < br.fat_copies; ++i) {
+        fwrite(f, sizeof(int32_t)*br.usable_cluster_count, 1, p_file);
+    }
     cout << "OK" << endl;
 
     fclose(p_file);
@@ -395,6 +412,10 @@ void fat::fileContent(char *string) {
     directory *dir = (directory *) malloc(sizeof(struct directory));
 
     char *split = strtok(string, "/");
+    if (split==NULL){
+        cout << "PATH NOT FOUND" << endl;
+        return;
+    }
 
     for (int j = 0; j < max_dir_num; j++) {
         fread(dir, sizeof(struct directory), 1, p_file);
@@ -412,7 +433,7 @@ void fat::fileContent(char *string) {
                     x = f[x];
                 }
 
-                cout << split << ": " << ss << endl;
+                cout << ss << endl;
                 free(dir);
                 free(text);
                 return;
@@ -940,7 +961,7 @@ void fat::defragment(){
 
     for (std::map<int, struct directory>::iterator it=fileMap.begin(); it!=fileMap.end(); ++it) {
 //        cout<<it->first<< " => " << it->second.name << endl;
-        int iter = it->second.size/br.cluster_size;
+        int iter = (int) fileContentMap.at(it->second.name).size()-1;
         it->second.start_cluster = x;
         for (int i = 0; i <= iter; ++i) {
             if (i!=iter){
@@ -980,7 +1001,9 @@ void fat::defragment(){
     }
 
     fseek(p_file, sizeof(boot_record), SEEK_SET);
-    fwrite(f, sizeof(int32_t)*br.usable_cluster_count*br.fat_copies, 1, p_file);
+    for (int i = 0; i < br.fat_copies; ++i) {
+        fwrite(f, sizeof(int32_t)*br.usable_cluster_count, 1, p_file);
+    }
     cout << "DEFRAGMENTATION SUCCESSFUL!" << endl << endl;
 
     writeFatStatus();
@@ -1137,7 +1160,7 @@ void fat::writeFatStatus() {
                 }
                 break;
             case FAT_UNUSED:
-                cout << i << "  :  Prázdné" << endl;
+//                cout << i << "  :  Prázdné" << endl;
                 break;
             default:
                 cout << i << "  :  Soubor (" << getFileName(i) << ")" << endl;
