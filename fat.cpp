@@ -433,7 +433,7 @@ void fat::fileContent(char *string) {
                     x = f[x];
                 }
 
-                cout << ss << endl;
+                cout << ss;
                 free(dir);
                 free(text);
                 return;
@@ -837,12 +837,29 @@ void fat::findPath(std::string str, char *name, char *path) {
     fsetpos(p_file, &default_data_position);
 
     directory *dir = (directory *) malloc(sizeof(struct directory));
+    char *checkName = name;
+
+    if (name==NULL) {
+        cout<<"FILE NOT EXIST"<<endl;
+        return;
+    }
+    else{
+        char *token = strtok(name, "/");
+        while(token != NULL) {
+            checkName = token;
+            token = strtok(NULL, "/");
+        }
+    }
     char *split = strtok(path, "/");
 
     if (split==NULL){
         directory *headers = (directory *) malloc(sizeof(directory));
         for (int j = 0; j < max_dir_num; j++) {
             fread(headers, sizeof(directory), 1, p_file);
+            if(strcmp(headers->name, checkName)==0){
+                cout<<"NAME ALREADY IN USE IN THIS DIRECTORY"<<endl;
+                return;
+            }
             if (headers->start_cluster == 0) {
                 fseek(p_file, (long) (-sizeof(directory)), SEEK_CUR);
 
@@ -880,6 +897,11 @@ void fat::findPath(std::string str, char *name, char *path) {
                 directory *headers = (directory *) malloc(sizeof(directory));
                 for (int j = 0; j < max_dir_num; j++) {
                     fread(headers, sizeof(directory), 1, p_file);
+                    if(strcmp(headers->name, checkName)==0){
+                        cout<<"NAME ALREADY IN USE IN THIS DIRECTORY"<<endl;
+                        return;
+                    }
+
                     if (headers->start_cluster == 0) {
                         fseek(p_file, (long) (-sizeof(directory)), SEEK_CUR);
 
